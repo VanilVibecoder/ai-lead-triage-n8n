@@ -87,32 +87,31 @@ Webhook
 
 ### Workflow architecture
 
-![Workflow architecture](screenshots/01_workflow_schema.png)
+![Workflow architecture](screenshots/workflow_schema.jpg)
 
 ### Successful request
 
-![Postman success](screenshots/02_postman_success.png)
+![Postman success](screenshots/postman_success.jpg)
 
 ### Hot lead notification
 
-![Telegram hot lead](screenshots/03_telegram_hot_lead.png)
+![Telegram hot lead](screenshots/telegram_hot_lead.jpg)
 
 ### Duplicate lead notification
 
-![Telegram duplicate lead](screenshots/04_telegram_duplicate_lead.png)
+![Telegram duplicate lead](screenshots/telegram_duplicate_lead.jpg)
 
 ### Google Sheets storage
 
-![Google Sheets](screenshots/05_google_sheets.png)
+![Google Sheets](screenshots/google_sheets.jpg)
 
 ### Unauthorized request
 
-![Unauthorized request](screenshots/06_unauthorized_401.png)
+![Unauthorized request](screenshots/unauthorized_401.jpg)
 
 ### Error Workflow alert
 
-![Error Workflow alert](screenshots/07_error_workflow_alert.png)
-
+![Error Workflow alert](screenshots/error_workflow_aler.jpg)
 ## Repository Structure
 
 ```text
