@@ -1,0 +1,1066 @@
+{
+  "name": "AI Lead Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.ai_input }}",
+        "options": {
+          "systemMessage": "Ты — AI ассистент отдела продаж онлайн-школы.\n\nТвоя задача — проанализировать входящую заявку и вернуть только валидный JSON без markdown, без пояснений и без текста вокруг JSON.\n\nОпредели:\n1. категорию заявки;\n2. приоритет;\n3. числовой lead_score от 0 до 100;\n4. намерение клиента;\n5. краткое summary;\n6. рекомендованное действие для менеджера;\n7. недостающую информацию.\n\nПравила priority:\nhot — клиент готов купить, оплатить, просит цену, дату старта, консультацию или быстрый контакт.\nwarm — есть интерес, но нет срочности.\ncold — слабый интерес или общий вопрос.\nunknown — недостаточно данных.\n\nПравила lead_score:\n0–30 = cold\n31–70 = warm\n71–100 = hot\n\nДопустимые lead_category:\ncourse_interest, consultation_request, pricing_question, support_question, partnership, spam_or_irrelevant, unknown.\n\nДопустимые priority:\nhot, warm, cold, unknown.\n\nКРИТИЧЕСКИ ВАЖНО:\nВерни только один валидный JSON-объект.\nНе используй markdown.\nНе используй ```json.\nНе добавляй пояснения до или после JSON.\nВсе ключи обязательны.\nЕсли данных недостаточно, используй \"unknown\" и пустой массив [].\n\nВерни JSON строго в таком формате:\n{\n  \"lead_category\": \"unknown\",\n  \"priority\": \"unknown\",\n  \"lead_score\": 0,\n  \"intent\": \"unknown\",\n  \"summary\": \"Краткое описание заявки.\",\n  \"recommended_action\": \"Что должен сделать менеджер.\",\n  \"missing_info\": []\n}\n\n\nspam_or_irrelevant — реклама, мошенничество, нерелевантные сообщения, крипта, ставки, случайный текст, оскорбления, сообщения без отношения к курсам/обучению/консультации."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2096,
+        -400
+      ],
+      "id": "b9c7d45d-1387-44e8-aed0-74afdb2e8087",
+      "name": "AI Agent",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        2048,
+        -192
+      ],
+      "id": "a545827a-0bf4-4a6c-8e9a-87d7a0918215",
+      "name": "Mistral Cloud Chat Model",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "MISTRAL_CREDENTIAL_ID_REDACTED",
+          "name": "MISTRAL_CREDENTIAL_REDACTED"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "WEBHOOK_PATH_REDACTED",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -736,
+        0
+      ],
+      "id": "45ee9f82-9b1e-4351-a275-38298cf16ec7",
+      "name": "Webhook",
+      "webhookId": "WEBHOOK_PATH_REDACTED"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1b9b51db-7430-4228-bbf8-5f1bf116f0a0",
+              "leftValue": "={{ Object.keys($json).length > 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        -400
+      ],
+      "id": "d72b3ddb-366a-4e3e-8115-cca9147521e1",
+      "name": "IF: Duplicate Found?",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "GOOGLE_SHEET_ID_REDACTED",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "GOOGLE_SHEET_URL_REDACTED"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "lead_key",
+              "lookupValue": "={{ $json.lead_key }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1072,
+        -400
+      ],
+      "id": "55fb8210-1a27-42cf-b542-67b11061fe90",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID_REDACTED",
+          "name": "GOOGLE_SHEETS_CREDENTIAL_REDACTED"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || {};\n\nconst leadName = String(body.name || 'Не указано').trim();\nconst leadMessage = String(body.message || '').trim();\nconst source = String(body.source || 'unknown').trim();\n\nconst rawPhone = String(body.phone || '').trim();\nconst rawEmail = String(body.email || '').trim().toLowerCase();\n\n// Нормализация телефона\nlet leadPhone = rawPhone\n  .replace(/[^\\d+]/g, '');\n\nif (/^8\\d{10}$/.test(leadPhone)) {\n  leadPhone = `+7${leadPhone.slice(1)}`;\n} else if (/^7\\d{10}$/.test(leadPhone)) {\n  leadPhone = `+${leadPhone}`;\n}\n\n// Валидация телефона\nconst isPhoneValid = /^\\+\\d{10,15}$/.test(leadPhone);\n\n// Валидация email\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nconst isEmailValid = rawEmail ? emailRegex.test(rawEmail) : false;\n\nconst leadEmail = isEmailValid ? rawEmail : '';\n\nconst hasMessage = leadMessage.length > 0;\nconst hasValidContact = isPhoneValid || isEmailValid;\n\n// lead_key строим только из валидного контакта\nconst leadKey = isEmailValid ? leadEmail : isPhoneValid ? leadPhone : '';\n\nlet status = 'new';\nlet validationError = '';\n\nif (!hasMessage) {\n  status = 'failed';\n  validationError = 'message is required';\n} else if (!hasValidContact) {\n  status = 'incomplete';\n  validationError = 'valid phone or email is required';\n}\n\nconst leadId = `lead_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;\n\nreturn [\n  {\n    json: {\n      lead_id: leadId,\n      created_at: new Date().toISOString(),\n\n      lead_name: leadName,\n      lead_phone: isPhoneValid ? leadPhone : '',\n      lead_email: leadEmail,\n      lead_message: leadMessage,\n      source,\n\n      raw_phone: rawPhone,\n      raw_email: rawEmail,\n\n      is_phone_valid: isPhoneValid,\n      is_email_valid: isEmailValid,\n\n      lead_key: leadKey,\n      has_message: hasMessage,\n      has_contact: hasValidContact,\n\n      status,\n      validation_error: validationError,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        -112
+      ],
+      "id": "06ba7de4-6c14-4455-a962-13bf357fea07",
+      "name": "Normalize + Validate Lead"
+    },
+    {
+      "parameters": {
+        "jsCode": "const originalLead = $('Prepare AI Input').item.json.original_lead;\n\nif (!originalLead) {\n  throw new Error('original_lead is missing from Prepare AI Input');\n}\n\nconst aiOutput = $input.item.json.output;\n\nconst fallbackParsed = {\n  lead_category: 'unknown',\n  priority: 'unknown',\n  lead_score: 0,\n  intent: 'ai_parse_failed',\n  summary: 'AI не смог корректно классифицировать заявку.',\n  recommended_action: 'Проверить заявку вручную и связаться с клиентом при необходимости.',\n  missing_info: [],\n};\n\nlet parsed = fallbackParsed;\nlet status = originalLead.status;\n\nif (!aiOutput) {\n  status = 'ai_failed';\n} else {\n  const raw = String(aiOutput).trim();\n\n  let cleanJsonString = raw\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n\n  const firstBrace = cleanJsonString.indexOf('{');\n  const lastBrace = cleanJsonString.lastIndexOf('}');\n\n  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {\n    cleanJsonString = cleanJsonString.slice(firstBrace, lastBrace + 1);\n  }\n\n  try {\n    parsed = JSON.parse(cleanJsonString);\n  } catch (error) {\n    status = 'ai_failed';\n    parsed = fallbackParsed;\n  }\n}\n\nconst allowedCategories = [\n  'course_interest',\n  'consultation_request',\n  'pricing_question',\n  'support_question',\n  'partnership',\n  'spam_or_irrelevant',\n  'unknown',\n];\n\nconst allowedPriorities = ['hot', 'warm', 'cold', 'unknown'];\n\nlet leadCategory = allowedCategories.includes(parsed.lead_category)\n  ? parsed.lead_category\n  : 'unknown';\n\nlet priority = allowedPriorities.includes(parsed.priority)\n  ? parsed.priority\n  : 'unknown';\n\n// Lead score validation\nlet leadScore = Number(parsed.lead_score);\n\nif (Number.isNaN(leadScore)) {\n  if (priority === 'hot') {\n    leadScore = 85;\n  } else if (priority === 'warm') {\n    leadScore = 55;\n  } else if (priority === 'cold') {\n    leadScore = 20;\n  } else {\n    leadScore = 0;\n  }\n}\n\nleadScore = Math.round(Math.max(0, Math.min(100, leadScore)));\n\n// Если priority unknown, но score явно высокий/средний/низкий — можно восстановить priority\nif (priority === 'unknown' && leadScore > 0) {\n  if (leadScore >= 71) {\n    priority = 'hot';\n  } else if (leadScore >= 31) {\n    priority = 'warm';\n  } else {\n    priority = 'cold';\n  }\n}\n\n// Если score противоречит priority, приоритет важнее, но score мягко поправляем\nif (priority === 'hot' && leadScore < 71) {\n  leadScore = 85;\n}\n\nif (priority === 'warm' && (leadScore < 31 || leadScore > 70)) {\n  leadScore = 55;\n}\n\nif (priority === 'cold' && leadScore > 30) {\n  leadScore = 20;\n}\n\n// SLA calculation\nconst slaByPriority = {\n  hot: 15,\n  warm: 120,\n  cold: 1440,\n  unknown: 1440,\n};\n\nconst slaMinutes = slaByPriority[priority] || 1440;\nconst followUpDeadline = new Date(Date.now() + slaMinutes * 60 * 1000).toISOString();\n\nconst missingInfo = Array.isArray(parsed.missing_info)\n  ? parsed.missing_info\n  : [];\n\nreturn [\n  {\n    json: {\n      ...originalLead,\n\n      lead_category: leadCategory,\n      priority,\n      lead_score: leadScore,\n      sla_minutes: slaMinutes,\n      follow_up_deadline: followUpDeadline,\n\n      intent: String(parsed.intent || '').trim(),\n      summary: String(parsed.summary || '').trim(),\n      recommended_action: String(parsed.recommended_action || '').trim(),\n      missing_info: missingInfo\n        .map(item => String(item).trim())\n        .filter(Boolean)\n        .join(', '),\n\n      status,\n      is_duplicate: originalLead.is_duplicate,\n      duplicate_note: originalLead.duplicate_note || '',\n\n      processed_at: new Date().toISOString(),\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        -400
+      ],
+      "id": "ea551d1a-8063-463f-b236-7337c88982bd",
+      "name": "Parse + Validate AI Output"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "GOOGLE_SHEET_ID_REDACTED",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "GOOGLE_SHEET_URL_REDACTED"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "created_at": "={{ $json.created_at }}",
+            "lead_key": "={{ $json.lead_key }}",
+            "lead_name": "={{ $json.lead_name }}",
+            "lead_phone": "={{ $json.lead_phone }}",
+            "lead_email": "={{ $json.lead_email }}",
+            "source": "={{ $json.source }}",
+            "lead_message": "={{ $json.lead_message }}",
+            "processed_at": "={{ $json.processed_at }}",
+            "is_duplicate": "={{ $json.is_duplicate }}",
+            "status": "={{ $json.status }}",
+            "missing_info": "={{ $json.missing_info }}",
+            "recommended_action": "={{ $json.recommended_action }}",
+            "summary": "={{ $json.summary }}",
+            "intent": "={{ $json.intent }}",
+            "priority": "={{ $json.priority }}",
+            "lead_category": "={{ $json.lead_category }}",
+            "lead_score": "={{ $json.lead_score }}",
+            "sla_minutes": "={{ $json.sla_minutes }}",
+            "follow_up_deadline": "={{ $json.follow_up_deadline }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_key",
+              "displayName": "lead_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lead_name",
+              "displayName": "lead_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_phone",
+              "displayName": "lead_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_email",
+              "displayName": "lead_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_message",
+              "displayName": "lead_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_category",
+              "displayName": "lead_category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "intent",
+              "displayName": "intent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recommended_action",
+              "displayName": "recommended_action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "missing_info",
+              "displayName": "missing_info",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "is_duplicate",
+              "displayName": "is_duplicate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_score",
+              "displayName": "lead_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sla_minutes",
+              "displayName": "sla_minutes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "follow_up_deadline",
+              "displayName": "follow_up_deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2672,
+        -400
+      ],
+      "id": "fd4e18de-75bf-440d-88da-37153db55e99",
+      "name": "Append Lead",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID_REDACTED",
+          "name": "GOOGLE_SHEETS_CREDENTIAL_REDACTED"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $json || {};\n\nconst priority = lead.priority || 'unknown';\nconst status = lead.status || 'unknown';\nconst category = lead.lead_category || 'unknown';\nconst score = Number.isFinite(Number(lead.lead_score)) ? Number(lead.lead_score) : 0;\nconst slaMinutes = Number.isFinite(Number(lead.sla_minutes)) ? Number(lead.sla_minutes) : 1440;\n\nconst isHot = priority === 'hot';\nconst isAiFailed = status === 'ai_failed';\nconst isDuplicate = lead.is_duplicate === true || lead.is_duplicate === 'true';\n\nlet title = '📩 Новая заявка';\n\nif (priority === 'hot') {\n  title = '🔥 Горячая заявка';\n} else if (priority === 'warm') {\n  title = '📩 Тёплая заявка';\n} else if (priority === 'cold') {\n  title = '🧊 Холодная заявка';\n}\n\nif (isAiFailed) {\n  title = '⚠️ Заявка требует ручной проверки';\n} else if (isDuplicate) {\n  if (priority === 'hot') {\n    title = '🔥 Повторная горячая заявка';\n  } else if (priority === 'warm') {\n    title = '📩 Повторная тёплая заявка';\n  } else if (priority === 'cold') {\n    title = '🧊 Повторная холодная заявка';\n  } else {\n    title = '📩 Повторная заявка';\n  }\n}\n\nconst contactParts = [];\n\nif (lead.lead_phone) {\n  contactParts.push(`Телефон: ${lead.lead_phone}`);\n}\n\nif (lead.lead_email) {\n  contactParts.push(`Email: ${lead.lead_email}`);\n}\n\nif (contactParts.length === 0) {\n  contactParts.push('Контакт: не указан');\n}\n\nconst duplicateText = isDuplicate\n  ? '\\n\\n⚠️ Возможный дубль заявки'\n  : '';\n\nlet slaText = '';\n\nif (slaMinutes < 60) {\n  slaText = `${slaMinutes} мин.`;\n} else if (slaMinutes === 60) {\n  slaText = '1 час';\n} else if (slaMinutes < 1440) {\n  slaText = `${Math.round(slaMinutes / 60)} ч.`;\n} else {\n  slaText = '24 ч.';\n}\n\nconst message = `${title}\n\nИмя: ${lead.lead_name || 'Не указано'}\n${contactParts.join('\\n')}\n\nКатегория: ${category}\nПриоритет: ${priority}\nScore: ${score}/100\nSLA: ответить в течение ${slaText}\nДедлайн: ${lead.follow_up_deadline || 'не указан'}\nСтатус: ${status}\n\nКратко:\n${lead.summary || 'Нет summary'}\n\nРекомендованное действие:\n${lead.recommended_action || 'Не указано'}\n\nИсточник: ${lead.source || 'unknown'}${duplicateText}`;\n\nreturn [\n  {\n    json: {\n      ...lead,\n      telegram_message: message,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        -400
+      ],
+      "id": "bd1cda05-4364-48f0-a63e-121938332024",
+      "name": "Prepare Telegram Message"
+    },
+    {
+      "parameters": {
+        "chatId": "TELEGRAM_CHAT_ID_REDACTED",
+        "text": "={{ $json.telegram_message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3440,
+        -416
+      ],
+      "id": "70cc0687-0061-4ff8-b9dc-262e97bcae53",
+      "name": "Notify Manager",
+      "webhookId": "TELEGRAM_WEBHOOK_ID_REDACTED",
+      "retryOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID_REDACTED",
+          "name": "TELEGRAM_CREDENTIAL_REDACTED"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{\n  {\n    success: true,\n    message: \"Заявка получена. Менеджер свяжется с вами.\",\n    status: $(\"Prepare Telegram Message\").item.json.status,\n    lead_id: $(\"Prepare Telegram Message\").item.json.lead_id,\n    is_duplicate: $(\"Prepare Telegram Message\").item.json.is_duplicate\n  }\n}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3120,
+        -624
+      ],
+      "id": "66e07d1f-df60-47a6-a14e-b5c6886064b6",
+      "name": "Respond Success"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"success\": false,\n  \"message\": \"Не удалось обработать заявку.\",\n  \"error\": \"phone or email is required\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        864,
+        -80
+      ],
+      "id": "2d129005-8c1b-4a3f-b5f1-25fee97486a4",
+      "name": "Respond no phone or email"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"success\": false,\n  \"message\": \"Не удалось обработать заявку. Проверьте контактные данные.\",\n  \"error\": \"lead_key_missing\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1120,
+        -160
+      ],
+      "id": "6a14dbf0-c44d-4406-9550-fb49e98a9a77",
+      "name": "Respond lead_key_missing"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalize + Validate Lead').item.json;\n\nreturn [\n  {\n    json: {\n      ...lead,\n      status: 'duplicate',\n      is_duplicate: true,\n      duplicate_note: 'Lead with this email or phone already exists',\n      route_type: 'duplicate',\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        -560
+      ],
+      "id": "d9105aaa-7b02-4ad2-abc7-0215916b9d5e",
+      "name": "Mark Duplicate"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalize + Validate Lead').item.json;\n\nreturn [\n  {\n    json: {\n      ...lead,\n      status: lead.status === 'incomplete' ? 'incomplete' : 'new',\n      is_duplicate: false,\n      duplicate_note: '',\n      route_type: 'new',\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        -240
+      ],
+      "id": "231b882f-80bf-4414-a737-d0933948d718",
+      "name": "Mark New"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"success\": false,\n  \"message\": \"Не удалось обработать заявку.\",\n  \"error\": \"message is required\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        624,
+        48
+      ],
+      "id": "3c0bd0a9-f98b-4df3-a789-c91a25e574e6",
+      "name": "Respond 400: Missing Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      ...$json,\n      ai_input: $json.lead_message,\n      original_lead: $json,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        -400
+      ],
+      "id": "cb70a989-32df-4efc-a2d7-0ba0b7696148",
+      "name": "Prepare AI Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b47ea740-c88c-4e40-8f0f-1e350e860683",
+              "leftValue": "={{ $json.has_message }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        -112
+      ],
+      "id": "ce87b8b2-fd1c-4aa6-ac50-cc31be925e66",
+      "name": "IF: Has Message?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dbd1d8f2-82b4-4c77-aa98-991790b78bbc",
+              "leftValue": "={{ $json.lead_key }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        864,
+        -304
+      ],
+      "id": "d4c863c2-7b71-4199-839b-45e5c1f0b763",
+      "name": "IF: Has Lead Key?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const headers = $json.headers || {};\n\nconst incomingSecret =\n  headers['x-lead-secret'] ||\n  headers['X-Lead-Secret'] ||\n  '';\n\nconst expectedSecret = 'WEBHOOK_SECRET_REDACTED';\n\nconst authorized = incomingSecret === expectedSecret;\n\nreturn [\n  {\n    json: {\n      ...$json,\n      authorized,\n      auth_error: authorized ? '' : 'unauthorized',\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        0
+      ],
+      "id": "f80d7f9f-0b45-40ca-bbcb-58057b0985e4",
+      "name": "Validate Webhook Secret"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"success\": false,\n  \"message\": \"Unauthorized request.\",\n  \"error\": \"invalid webhook secret\"\n}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        112,
+        96
+      ],
+      "id": "d7e6cff4-c1a9-431d-9167-000d1711f1e9",
+      "name": "Respond 401: Unauthorized"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "10b4be42-6473-41a5-a520-b745f12a8623",
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -96,
+        0
+      ],
+      "id": "c815693a-d04b-4a44-b723-ad122336c25a",
+      "name": "IF: Authorized?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5eff7877-2ea1-45bc-86a6-d9c2f8b2ec54",
+              "leftValue": "={{ $json.lead_category !== 'spam_or_irrelevant' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3088,
+        -400
+      ],
+      "id": "be454483-6ccd-4ff5-8fa9-0e93817f3c8e",
+      "name": "IF: Should Notify Manager?"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      ...$json,\n      notification_skipped: true,\n      skip_reason: 'spam_or_irrelevant',\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3440,
+        -224
+      ],
+      "id": "f1e19eca-4e2a-4c18-897c-fa368893042b",
+      "name": "Skip Manager Notification"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "629a5537-97ab-406d-805f-5cb4e9497fb0",
+              "leftValue": "={{ $json.lead_phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "e3a7e3dc-2ccd-44ea-8546-6213b049da17",
+              "leftValue": "={{ $json.lead_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        656,
+        -208
+      ],
+      "id": "dc7968d8-39b5-4b0d-8baa-5e154cf65558",
+      "name": "IF: Has Valid Contact?"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Mistral Cloud Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Webhook Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse + Validate AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "IF: Duplicate Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Duplicate Found?": {
+      "main": [
+        [
+          {
+            "node": "Mark Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark New",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize + Validate Lead": {
+      "main": [
+        [
+          {
+            "node": "IF: Has Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Validate AI Output": {
+      "main": [
+        [
+          {
+            "node": "Append Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Lead": {
+      "main": [
+        [
+          {
+            "node": "Prepare Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF: Should Notify Manager?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Manager": {
+      "main": [
+        []
+      ]
+    },
+    "Mark Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark New": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 400: Missing Message": {
+      "main": [
+        []
+      ]
+    },
+    "Prepare AI Input": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Has Message?": {
+      "main": [
+        [
+          {
+            "node": "IF: Has Valid Contact?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400: Missing Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Has Lead Key?": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond lead_key_missing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Webhook Secret": {
+  "main": [
+    [
+      {
+        "node": "IF: Authorized?",
+        "type": "main",
+        "index": 0
+      }
+    ]
+  ]
+},
+    "IF: Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Normalize + Validate Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401: Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Should Notify Manager?": {
+      "main": [
+        [
+          {
+            "node": "Notify Manager",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Manager Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Has Valid Contact?": {
+      "main": [
+        [
+          {
+            "node": "IF: Has Lead Key?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond no phone or email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "ERROR_WORKFLOW_ID_REDACTED",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "VERSION_ID_REDACTED",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "INSTANCE_ID_REDACTED"
+  },
+  "id": "WORKFLOW_ID_REDACTED",
+  "tags": []
+}
